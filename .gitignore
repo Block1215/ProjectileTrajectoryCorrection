@@ -1,0 +1,19 @@
+# Maven build output (contains absolute local paths in maven-status/*.lst)
+target/
+
+# Jars: built plugin, Minecraft server/client jars, etc.
+*.jar
+
+# Local test server directories
+run/
+server/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+Thumbs.db
+.DS_Store
