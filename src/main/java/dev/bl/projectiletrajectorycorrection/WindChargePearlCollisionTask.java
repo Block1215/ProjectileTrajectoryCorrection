@@ -1,6 +1,7 @@
 package dev.bl.projectiletrajectorycorrection;
 
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -13,6 +14,8 @@ import org.bukkit.entity.WindCharge;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.BoundingBox;
+import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
 import java.util.Collection;
@@ -21,20 +24,23 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Each server tick, scan for Wind Charges that are about to "tunnel through"
- * an Ender Pearl (vanilla swept-AABB collision misses high relative velocity
- * pairs). On detection we:
- *   1. Teleport the Ender Pearl's owner to the swept collision point — this
- *      matches user expectation that the projectile combo TPs the player.
- *   2. Reproduce vanilla EP TP side effects (portal particles + sound + 5.0
- *      fall damage) so survival use feels correct.
- *   3. Play a Wind Charge burst at the collision point and remove both
- *      projectiles.
+ * Vanilla's per-tick raycast can miss when a Wind Charge and an Ender Pearl move
+ * at high relative velocity — their swept paths cross but neither ray lands
+ * inside the other's bounding box, so the charge tunnels straight through.
+ *
+ * Each tick we redo vanilla's ray-vs-box test in the pearl's frame of reference,
+ * so the pearl's motion during the tick is accounted for. The hit box is the
+ * same size vanilla would use, so this only fixes missed hits - it never makes
+ * the pair collide from further away than normal.
  */
 public final class WindChargePearlCollisionTask extends BukkitRunnable {
 
-    private static final double HIT_RADIUS = 0.6;
-    private static final double HIT_RADIUS_SQ = HIT_RADIUS * HIT_RADIUS;
+    /**
+     * Hit radius (blocks) added around the pearl's box for pearl/charge hits.
+     * Fixed: it never changes with the charge's age.
+     * 0.625 = the pearl's 0.25 box grown to a 1.5-block cube (diameter 1.5).
+     */
+    private static final double HIT_MARGIN = 0.625;
 
     private final Plugin plugin;
     private final Set<UUID> consumed = new HashSet<>();
@@ -72,17 +78,36 @@ public final class WindChargePearlCollisionTask extends BukkitRunnable {
                     Vector epVel = ep.getVelocity();
                     Vector epNext = epPos.clone().add(epVel);
 
-                    double minDistSq = minSegmentDistSq(wcPos, wcNext, epPos, epNext);
-                    if (minDistSq > HIT_RADIUS_SQ) continue;
+                    // Cast the charge's path in the pearl's frame of reference so
+                    // the pearl's own motion during the tick is accounted for.
+                    BoundingBox relBox = ep.getBoundingBox().clone()
+                        .expand(HIT_MARGIN)
+                        .shift(epPos.clone().multiply(-1.0));
+                    Vector relStart = wcPos.clone().subtract(epPos);
+                    Vector relEnd = wcNext.clone().subtract(epNext);
+                    Vector relPath = relEnd.clone().subtract(relStart);
+                    double relLen = relPath.length();
 
-                    double tStar = closestApproachT(wcPos, wcNext, epPos, epNext);
-                    Vector wcAt = wcPos.clone().add(wcVel.clone().multiply(tStar));
-                    Vector epAt = epPos.clone().add(epVel.clone().multiply(tStar));
+                    double t;
+                    if (relBox.contains(relStart)) {
+                        t = 0.0;
+                    } else {
+                        if (relLen < 1e-9) continue;
+                        RayTraceResult hit = relBox.rayTrace(
+                            relStart, relPath.clone().normalize(), relLen);
+                        if (hit == null) continue;
+                        t = Math.min(1.0,
+                            hit.getHitPosition().clone().subtract(relStart).length() / relLen);
+                    }
+
+                    Vector epAt = epPos.clone().add(epVel.clone().multiply(t));
                     Location hitLoc = new Location(world,
-                        (wcAt.getX() + epAt.getX()) * 0.5,
-                        (wcAt.getY() + epAt.getY()) * 0.5,
-                        (wcAt.getZ() + epAt.getZ()) * 0.5);
+                        epAt.getX(), epAt.getY(), epAt.getZ());
 
+                    if (PtcDebug.on(ep.getShooter())) {
+                        PtcDebug.send((Player) ep.getShooter(), "HIT: charge caught pearl (charge age "
+                            + wc.getTicksLived() + "t)");
+                    }
                     teleportOwner(ep, hitLoc);
                     playEffects(hitLoc);
                     ep.remove();
@@ -103,7 +128,6 @@ public final class WindChargePearlCollisionTask extends BukkitRunnable {
         dest.setYaw(player.getLocation().getYaw());
         dest.setPitch(player.getLocation().getPitch());
 
-        // Dismount any vehicle first — vanilla EP TP does the same.
         Entity vehicle = player.getVehicle();
         if (vehicle != null) player.leaveVehicle();
 
@@ -111,12 +135,11 @@ public final class WindChargePearlCollisionTask extends BukkitRunnable {
         player.setFallDistance(0.0f);
 
         // Vanilla applies 5.0 fall-style damage on EP TP (unless creative).
-        if (player.getGameMode() != org.bukkit.GameMode.CREATIVE
-                && player.getGameMode() != org.bukkit.GameMode.SPECTATOR) {
+        if (player.getGameMode() != GameMode.CREATIVE
+                && player.getGameMode() != GameMode.SPECTATOR) {
             player.damage(5.0, ep);
         }
 
-        // Vanilla TP sound on the player's new position.
         World w = dest.getWorld();
         if (w != null) {
             w.playSound(dest, Sound.ENTITY_ENDERMAN_TELEPORT, SoundCategory.PLAYERS, 1.0f, 1.0f);
@@ -126,34 +149,10 @@ public final class WindChargePearlCollisionTask extends BukkitRunnable {
     private void playEffects(Location hitLoc) {
         World world = hitLoc.getWorld();
         if (world == null) return;
-        // Wind Charge burst visual + sound at the collision point.
         world.spawnParticle(Particle.GUST, hitLoc, 1, 0.0, 0.0, 0.0, 0.0);
         world.spawnParticle(Particle.GUST_EMITTER_SMALL, hitLoc, 1, 0.0, 0.0, 0.0, 0.0);
         world.playSound(hitLoc, Sound.ENTITY_WIND_CHARGE_WIND_BURST, SoundCategory.NEUTRAL, 1.0f, 1.0f);
-        // Portal particles for the Ender Pearl side, like the pearl's own onHit.
         world.spawnParticle(Particle.PORTAL, hitLoc, 32, 0.5, 0.5, 0.5, 0.1);
     }
 
-    private static double minSegmentDistSq(Vector a1, Vector a2, Vector b1, Vector b2) {
-        Vector dPos = a1.clone().subtract(b1);
-        Vector dVel = a2.clone().subtract(a1).subtract(b2.clone().subtract(b1));
-        double dvSq = dVel.lengthSquared();
-        if (dvSq < 1e-9) return dPos.lengthSquared();
-        double t = -dPos.dot(dVel) / dvSq;
-        if (t < 0.0) t = 0.0;
-        else if (t > 1.0) t = 1.0;
-        Vector closest = dPos.clone().add(dVel.multiply(t));
-        return closest.lengthSquared();
-    }
-
-    private static double closestApproachT(Vector a1, Vector a2, Vector b1, Vector b2) {
-        Vector dPos = a1.clone().subtract(b1);
-        Vector dVel = a2.clone().subtract(a1).subtract(b2.clone().subtract(b1));
-        double dvSq = dVel.lengthSquared();
-        if (dvSq < 1e-9) return 0.0;
-        double t = -dPos.dot(dVel) / dvSq;
-        if (t < 0.0) t = 0.0;
-        else if (t > 1.0) t = 1.0;
-        return t;
-    }
 }

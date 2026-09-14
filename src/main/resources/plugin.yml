@@ -4,3 +4,12 @@ main: dev.bl.projectiletrajectorycorrection.ProjectileTrajectoryCorrectionPlugin
 api-version: '1.21'
 author: Bl
 description: Fixes the slight projectile deviation when looking straight up or straight down.
+commands:
+  ptcdebug:
+    description: Toggle projectile debug output for yourself.
+    usage: /ptcdebug
+    permission: projectiletrajectorycorrection.debug
+permissions:
+  projectiletrajectorycorrection.debug:
+    description: Allows /ptcdebug.
+    default: op
