@@ -9,14 +9,14 @@
     <version>2.0.0</version>
     <packaging>jar</packaging>
     <name>ProjectileTrajectoryCorrection</name>
-    <description>Fixes projectile deviation when shooting straight up or down.</description>
+    <description>Fixes projectile deviation when shooting straight up or down. (Minecraft 26.1.2 / 26.2)</description>
 
     <properties>
-        <java.version>21</java.version>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <java.version>25</java.version>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <paper.version>1.21.11-R0.1-SNAPSHOT</paper.version>
+        <paper.version>26.1.2.build.74-stable</paper.version>
     </properties>
 
     <repositories>
@@ -42,7 +42,7 @@
     </dependencies>
 
     <build>
-        <finalName>${project.name}-${project.version}</finalName>
+        <finalName>${project.name}-${project.version}-mc26.1.2-26.2</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
