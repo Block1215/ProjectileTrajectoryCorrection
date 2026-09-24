@@ -35,13 +35,6 @@ import java.util.UUID;
  */
 public final class WindChargePearlCollisionTask extends BukkitRunnable {
 
-    /**
-     * Hit radius (blocks) added around the pearl's box for pearl/charge hits.
-     * Fixed: it never changes with the charge's age.
-     * 0.625 = the pearl's 0.25 box grown to a 1.5-block cube (diameter 1.5).
-     */
-    private static final double HIT_MARGIN = 0.625;
-
     private final Plugin plugin;
     private final Set<UUID> consumed = new HashSet<>();
 
@@ -71,6 +64,10 @@ public final class WindChargePearlCollisionTask extends BukkitRunnable {
                 Vector wcPos = wc.getLocation().toVector();
                 Vector wcNext = wcPos.clone().add(wcVel);
 
+                // Fixed size: unlike vanilla it never grows with the charge's
+                // age. Set in game with /ptc hitbox.
+                double margin = Settings.margin();
+
                 for (EnderPearl ep : pearls) {
                     if (!ep.isValid() || ep.isDead()) continue;
 
@@ -81,7 +78,7 @@ public final class WindChargePearlCollisionTask extends BukkitRunnable {
                     // Cast the charge's path in the pearl's frame of reference so
                     // the pearl's own motion during the tick is accounted for.
                     BoundingBox relBox = ep.getBoundingBox().clone()
-                        .expand(HIT_MARGIN)
+                        .expand(margin)
                         .shift(epPos.clone().multiply(-1.0));
                     Vector relStart = wcPos.clone().subtract(epPos);
                     Vector relEnd = wcNext.clone().subtract(epNext);

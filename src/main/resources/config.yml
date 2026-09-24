@@ -1,0 +1,20 @@
+# All settings can be changed in game with /ptc (op only); changes are saved here.
+
+# Remove the thrower's horizontal movement from projectiles.   /ptc horizontal on|off
+remove-horizontal-inertia: true
+
+# Remove the thrower's vertical movement from projectiles.     /ptc vertical on|off
+# off = vertical inertia exactly as vanilla.
+remove-vertical-inertia: false
+
+# Wind charges thrown while gliding on elytra are spawned where the player was
+# this many ticks earlier (the aim is the current one).         /ptc rewind on|off|<ticks>
+elytra-wind-charge-rewind:
+  enabled: true
+  ticks: 3
+
+# Size of the hit volume used when a wind charge meets an ender pearl.
+# A cube of this many blocks across, centred on the pearl (2 = hits from
+# 1 block away). Vanilla is about 0.85 across at most. Only pearl/charge
+# hits use this; every other collision is untouched.   /ptc hitbox <0.25-10>
+hit-diameter: 2.0

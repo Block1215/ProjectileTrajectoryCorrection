@@ -3,13 +3,20 @@ version: '${project.version}'
 main: dev.bl.projectiletrajectorycorrection.ProjectileTrajectoryCorrectionPlugin
 api-version: '1.21'
 author: Bl
-description: Fixes the slight projectile deviation when looking straight up or straight down.
+description: Removes projectile scatter and throwing inertia, and fixes wind charge / ender pearl hits.
 commands:
+  ptc:
+    description: Show or change projectile correction settings.
+    usage: /ptc [horizontal|vertical|rewind|hitbox|reload] [value]
+    permission: projectiletrajectorycorrection.admin
   ptcdebug:
     description: Toggle projectile debug output for yourself.
     usage: /ptcdebug
     permission: projectiletrajectorycorrection.debug
 permissions:
+  projectiletrajectorycorrection.admin:
+    description: Allows /ptc.
+    default: op
   projectiletrajectorycorrection.debug:
     description: Allows /ptcdebug.
     default: op

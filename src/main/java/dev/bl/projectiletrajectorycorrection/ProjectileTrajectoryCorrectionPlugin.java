@@ -6,6 +6,8 @@ public final class ProjectileTrajectoryCorrectionPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        Settings.load(this);
+
         PlayerMovementTracker tracker = new PlayerMovementTracker();
         tracker.start(this);
 
@@ -16,6 +18,11 @@ public final class ProjectileTrajectoryCorrectionPlugin extends JavaPlugin {
         PtcDebug.startApproachTracker(this);
         if (getCommand("ptcdebug") != null) {
             getCommand("ptcdebug").setExecutor(new PtcDebug());
+        }
+        Settings settings = new Settings(this);
+        if (getCommand("ptc") != null) {
+            getCommand("ptc").setExecutor(settings);
+            getCommand("ptc").setTabCompleter(settings);
         }
         getLogger().info(getName() + " v" + getDescription().getVersion() + " enabled.");
     }
