@@ -7,6 +7,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.ThrownExpBottle;
 import org.bukkit.entity.ThrownPotion;
+import org.bukkit.entity.WindCharge;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -28,9 +29,13 @@ import java.util.UUID;
  *     velocity = (normalize(aim) + randomNoise) * power
  *                + (known.x, onGround ? 0 : known.y, known.z)
  * We subtract the exact inertia (see {@link ShooterInertia}) and rebuild the
- * shot along the aim, removing the scatter on every axis. No inertia is added
- * back on any axis, so every throw is exactly aim * power in every state
- * (walking, jumping, falling, gliding).
+ * shot along the aim, removing the scatter on every axis. The horizontal and
+ * vertical inertia are then left out or put back per /ptc horizontal and
+ * /ptc vertical (default: horizontal removed, vertical kept as vanilla), the
+ * same rule in every state (walking, jumping, falling, gliding).
+ *
+ * A wind charge thrown while gliding is additionally spawned where the player
+ * was a few ticks earlier (/ptc rewind), with the current aim.
  *
  * Crossbows are different: vanilla fires them WITHOUT any shooter inertia, at
  * the aim rotated about the player's up axis (multishot spreads the side
@@ -102,12 +107,60 @@ public final class ProjectileLaunchListener implements Listener {
         double power = shot.dot(aim);
         if (power <= 0.0) power = shot.length();
 
-        // Same rule in every state: no inertia on any axis.
+        // Scatter is always gone. Each inertia axis is removed only if enabled
+        // (/ptc horizontal, /ptc vertical); otherwise vanilla's value goes back in.
         Vector newVel = aim.clone().multiply(power);
+        if (!Settings.removeHorizontal()) {
+            newVel.setX(newVel.getX() + applied.getX());
+            newVel.setZ(newVel.getZ() + applied.getZ());
+        }
+        if (!Settings.removeVertical()) {
+            newVel.setY(newVel.getY() + applied.getY());
+        }
         projectile.setVelocity(newVel);
+
+        int rewound = 0;
+        if (projectile instanceof WindCharge && player.isGliding()) {
+            rewound = rewindSpawn(player, projectile);
+        }
 
         if (PtcDebug.on(player)) {
             debugThrow(player, projectile, eye, v, applied, exact, newVel);
+            if (rewound > 0) {
+                PtcDebug.send(player, " spawn rewound " + rewound + " ticks");
+            }
+        }
+    }
+
+    /**
+     * Elytra wind charge: move the spawn point to where the player was a few
+     * ticks ago (/ptc rewind), keeping the current aim. The charge keeps the
+     * same offset from the player that vanilla gave it.
+     *
+     * @return ticks rewound, or 0 if nothing was changed
+     */
+    private int rewindSpawn(Player player, Projectile projectile) {
+        int ticks = Settings.rewindTicks();
+        if (ticks <= 0) return 0;
+        Location past = tracker.getLocationTicksAgo(player.getUniqueId(), ticks);
+        if (past == null || past.getWorld() != player.getWorld()) return 0;
+
+        Location now = player.getLocation();
+        Location spawn = projectile.getLocation();
+        Location target = spawn.clone().add(
+            past.getX() - now.getX(), past.getY() - now.getY(), past.getZ() - now.getZ());
+        return moveUnspawned(projectile, target) ? ticks : 0;
+    }
+
+    /** Moves a projectile that is still being launched (not yet in the world). */
+    private static boolean moveUnspawned(Projectile projectile, Location target) {
+        try {
+            Object handle = projectile.getClass().getMethod("getHandle").invoke(projectile);
+            handle.getClass().getMethod("setPos", double.class, double.class, double.class)
+                .invoke(handle, target.getX(), target.getY(), target.getZ());
+            return true;
+        } catch (Throwable ignored) {
+            return projectile.teleport(target);
         }
     }
 
@@ -137,7 +190,7 @@ public final class ProjectileLaunchListener implements Listener {
             }
             if (nearest != null) {
                 PtcDebug.send(player, " charge spawned horiz " + PtcDebug.f(nd)
-                    + " from pearl (hit reach 0.75), pearl vel=" + PtcDebug.v(nearest.getVelocity())
+                    + " from pearl (hit reach " + PtcDebug.f(Settings.reach()) + "), pearl vel=" + PtcDebug.v(nearest.getVelocity())
                     + " pearl age=" + nearest.getTicksLived() + "t");
             }
         }
