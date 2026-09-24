@@ -6,7 +6,7 @@
 
     <groupId>dev.bl</groupId>
     <artifactId>projectile-trajectory-correction</artifactId>
-    <version>3.0.0</version>
+    <version>3.0.1</version>
     <packaging>jar</packaging>
     <name>ProjectileTrajectoryCorrection</name>
     <description>Fixes projectile deviation when shooting straight up or down.</description>
