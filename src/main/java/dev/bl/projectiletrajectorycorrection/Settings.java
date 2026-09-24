@@ -16,7 +16,8 @@ import java.util.Locale;
  *   /ptc                         show every setting
  *   /ptc horizontal on|off       remove the shooter's horizontal inertia
  *   /ptc vertical on|off         remove the shooter's vertical inertia
- *   /ptc rewind on|off           elytra wind charge: throw from an earlier position
+ *   /ptc rewind on|off           wind charge: throw from an earlier position
+ *   /ptc rewind elytraonly on|off   ...only while gliding on elytra
  *   /ptc rewind <ticks>          ...how many ticks back
  *   /ptc hitbox <blocks>         pearl/charge hit size (cube diameter)
  *   /ptc reload                  re-read config.yml
@@ -38,6 +39,7 @@ final class Settings implements TabExecutor {
     private static volatile boolean removeVertical = false;
     private static volatile boolean rewindEnabled = true;
     private static volatile int rewindTicks = 3;
+    private static volatile boolean rewindElytraOnly = false;
 
     private final Plugin plugin;
 
@@ -61,7 +63,11 @@ final class Settings implements TabExecutor {
         return removeVertical;
     }
 
-    /** Ticks to rewind an elytra wind charge's spawn point, or 0 when off. */
+    static boolean rewindElytraOnly() {
+        return rewindElytraOnly;
+    }
+
+    /** Ticks to rewind a wind charge's spawn point, or 0 when off. */
     static int rewindTicks() {
         return rewindEnabled ? rewindTicks : 0;
     }
@@ -75,6 +81,7 @@ final class Settings implements TabExecutor {
         removeVertical = c.getBoolean("remove-vertical-inertia", false);
         rewindEnabled = c.getBoolean("elytra-wind-charge-rewind.enabled", true);
         rewindTicks = (int) clamp(c.getInt("elytra-wind-charge-rewind.ticks", 3), 0, REWIND_MAX);
+        rewindElytraOnly = c.getBoolean("elytra-wind-charge-rewind.elytra-only", false);
     }
 
     private void save(String key, Object value) {
@@ -111,7 +118,15 @@ final class Settings implements TabExecutor {
             }
             case "rewind" -> {
                 if (val == null) {
-                    msg(sender, "usage: /ptc rewind <on|off|0-" + REWIND_MAX + ">");
+                    msg(sender, "usage: /ptc rewind <on|off|0-" + REWIND_MAX + "|elytraonly on|off>");
+                    return true;
+                }
+                if (val.equals("elytraonly")) {
+                    Boolean b = parseToggle(sender, args.length > 2 ? args[2].toLowerCase(Locale.ROOT) : null);
+                    if (b == null) return true;
+                    rewindElytraOnly = b;
+                    save("elytra-wind-charge-rewind.elytra-only", b);
+                    msg(sender, "wind charge rewind: " + (b ? "only while gliding on elytra" : "always"));
                     return true;
                 }
                 if (val.equals("on") || val.equals("off")) {
@@ -174,7 +189,8 @@ final class Settings implements TabExecutor {
         msg(s, "horizontal inertia removal: " + onOff(removeHorizontal) + "   /ptc horizontal on|off");
         msg(s, "vertical inertia removal: " + onOff(removeVertical) + "   /ptc vertical on|off");
         msg(s, "elytra wind charge rewind: " + onOff(rewindEnabled) + ", " + rewindTicks
-            + " ticks   /ptc rewind on|off|<ticks>");
+            + " ticks, " + (rewindElytraOnly ? "elytra only" : "always")
+            + "   /ptc rewind on|off|<ticks>|elytraonly on|off");
         msg(s, "pearl/charge hit size: " + fmt(hitDiameter) + " blocks   /ptc hitbox <blocks>");
     }
 
@@ -186,10 +202,13 @@ final class Settings implements TabExecutor {
         } else if (args.length == 2) {
             opts = switch (args[0].toLowerCase(Locale.ROOT)) {
                 case "horizontal", "vertical" -> List.of("on", "off");
-                case "rewind" -> List.of("on", "off", "1", "2", "3", "4", "5");
+                case "rewind" -> List.of("on", "off", "elytraonly", "1", "2", "3", "4", "5");
                 case "hitbox" -> List.of("1", "1.5", "2");
                 default -> List.of();
             };
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("rewind")
+                && args[1].equalsIgnoreCase("elytraonly")) {
+            opts = List.of("on", "off");
         } else {
             return Collections.emptyList();
         }

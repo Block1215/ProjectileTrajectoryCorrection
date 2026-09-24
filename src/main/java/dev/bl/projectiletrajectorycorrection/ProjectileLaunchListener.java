@@ -34,8 +34,9 @@ import java.util.UUID;
  * /ptc vertical (default: horizontal removed, vertical kept as vanilla), the
  * same rule in every state (walking, jumping, falling, gliding).
  *
- * A wind charge thrown while gliding is additionally spawned where the player
- * was a few ticks earlier (/ptc rewind), with the current aim.
+ * A wind charge is additionally spawned where the player was a few ticks
+ * earlier (/ptc rewind), with the current aim - always, or only while gliding
+ * on elytra (/ptc rewind elytraonly).
  *
  * Crossbows are different: vanilla fires them WITHOUT any shooter inertia, at
  * the aim rotated about the player's up axis (multishot spreads the side
@@ -120,7 +121,8 @@ public final class ProjectileLaunchListener implements Listener {
         projectile.setVelocity(newVel);
 
         int rewound = 0;
-        if (projectile instanceof WindCharge && player.isGliding()) {
+        if (projectile instanceof WindCharge
+                && (!Settings.rewindElytraOnly() || player.isGliding())) {
             rewound = rewindSpawn(player, projectile);
         }
 
@@ -133,7 +135,7 @@ public final class ProjectileLaunchListener implements Listener {
     }
 
     /**
-     * Elytra wind charge: move the spawn point to where the player was a few
+     * Wind charge: move the spawn point to where the player was a few
      * ticks ago (/ptc rewind), keeping the current aim. The charge keeps the
      * same offset from the player that vanilla gave it.
      *

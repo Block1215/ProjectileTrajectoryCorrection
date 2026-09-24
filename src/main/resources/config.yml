@@ -7,11 +7,13 @@ remove-horizontal-inertia: true
 # off = vertical inertia exactly as vanilla.
 remove-vertical-inertia: false
 
-# Wind charges thrown while gliding on elytra are spawned where the player was
-# this many ticks earlier (the aim is the current one).         /ptc rewind on|off|<ticks>
+# Wind charges are spawned where the player was this many ticks earlier
+# (the aim is the current one).                                  /ptc rewind on|off|<ticks>
+# elytra-only: true = only while gliding on elytra.              /ptc rewind elytraonly on|off
 elytra-wind-charge-rewind:
   enabled: true
   ticks: 3
+  elytra-only: false
 
 # Size of the hit volume used when a wind charge meets an ender pearl.
 # A cube of this many blocks across, centred on the pearl (2 = hits from
