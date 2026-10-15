@@ -19,6 +19,7 @@ import java.util.Locale;
  *   /ptc rewind on|off           wind charge: throw from an earlier position
  *   /ptc rewind elytraonly on|off   ...only while gliding on elytra
  *   /ptc rewind <ticks>          ...how many ticks back
+ *   /ptc rewind angle <degrees>  ...only when aimed within this many degrees of straight up
  *   /ptc hitbox <blocks>         pearl/charge hit size (cube diameter)
  *   /ptc reload                  re-read config.yml
  *
@@ -33,6 +34,7 @@ final class Settings implements TabExecutor {
     static final double HITBOX_MIN = 0.25;
     static final double HITBOX_MAX = 10.0;
     static final int REWIND_MAX = 20;
+    static final double ANGLE_MAX = 90.0;
 
     private static volatile double hitDiameter = 2.0;
     private static volatile boolean removeHorizontal = true;
@@ -40,6 +42,7 @@ final class Settings implements TabExecutor {
     private static volatile boolean rewindEnabled = true;
     private static volatile int rewindTicks = 3;
     private static volatile boolean rewindElytraOnly = false;
+    private static volatile double rewindAngle = 5.0;
 
     private final Plugin plugin;
 
@@ -67,6 +70,11 @@ final class Settings implements TabExecutor {
         return rewindElytraOnly;
     }
 
+    /** Rewind only applies when the aim is within this many degrees of straight up. */
+    static double rewindAngle() {
+        return rewindAngle;
+    }
+
     /** Ticks to rewind a wind charge's spawn point, or 0 when off. */
     static int rewindTicks() {
         return rewindEnabled ? rewindTicks : 0;
@@ -82,6 +90,7 @@ final class Settings implements TabExecutor {
         rewindEnabled = c.getBoolean("elytra-wind-charge-rewind.enabled", true);
         rewindTicks = (int) clamp(c.getInt("elytra-wind-charge-rewind.ticks", 3), 0, REWIND_MAX);
         rewindElytraOnly = c.getBoolean("elytra-wind-charge-rewind.elytra-only", false);
+        rewindAngle = clamp(c.getDouble("elytra-wind-charge-rewind.max-angle-from-up", 5.0), 0.0, ANGLE_MAX);
     }
 
     private void save(String key, Object value) {
@@ -118,7 +127,30 @@ final class Settings implements TabExecutor {
             }
             case "rewind" -> {
                 if (val == null) {
-                    msg(sender, "usage: /ptc rewind <on|off|0-" + REWIND_MAX + "|elytraonly on|off>");
+                    msg(sender, "usage: /ptc rewind <on|off|0-" + REWIND_MAX + "|elytraonly on|off|angle <0-90>>");
+                    return true;
+                }
+                if (val.equals("angle")) {
+                    if (args.length < 3) {
+                        msg(sender, "wind charge rewind: only within " + fmt(rewindAngle)
+                            + " degrees of straight up   /ptc rewind angle <0-" + fmt(ANGLE_MAX) + ">");
+                        return true;
+                    }
+                    double a;
+                    try {
+                        a = Double.parseDouble(args[2]);
+                    } catch (NumberFormatException e) {
+                        msg(sender, "not a number: " + args[2]);
+                        return true;
+                    }
+                    if (!(a >= 0.0) || a > ANGLE_MAX) {
+                        msg(sender, "angle must be between 0 and " + fmt(ANGLE_MAX));
+                        return true;
+                    }
+                    rewindAngle = a;
+                    save("elytra-wind-charge-rewind.max-angle-from-up", a);
+                    msg(sender, "wind charge rewind: only within " + fmt(a) + " degrees of straight up"
+                        + (a >= ANGLE_MAX ? " (= every angle)" : ""));
                     return true;
                 }
                 if (val.equals("elytraonly")) {
@@ -190,7 +222,8 @@ final class Settings implements TabExecutor {
         msg(s, "vertical inertia removal: " + onOff(removeVertical) + "   /ptc vertical on|off");
         msg(s, "elytra wind charge rewind: " + onOff(rewindEnabled) + ", " + rewindTicks
             + " ticks, " + (rewindElytraOnly ? "elytra only" : "always")
-            + "   /ptc rewind on|off|<ticks>|elytraonly on|off");
+            + ", within " + fmt(rewindAngle) + " deg of straight up"
+            + "   /ptc rewind on|off|<ticks>|elytraonly on|off|angle <deg>");
         msg(s, "pearl/charge hit size: " + fmt(hitDiameter) + " blocks   /ptc hitbox <blocks>");
     }
 
@@ -202,13 +235,16 @@ final class Settings implements TabExecutor {
         } else if (args.length == 2) {
             opts = switch (args[0].toLowerCase(Locale.ROOT)) {
                 case "horizontal", "vertical" -> List.of("on", "off");
-                case "rewind" -> List.of("on", "off", "elytraonly", "1", "2", "3", "4", "5");
+                case "rewind" -> List.of("on", "off", "elytraonly", "angle", "1", "2", "3", "4", "5");
                 case "hitbox" -> List.of("1", "1.5", "2");
                 default -> List.of();
             };
         } else if (args.length == 3 && args[0].equalsIgnoreCase("rewind")
                 && args[1].equalsIgnoreCase("elytraonly")) {
             opts = List.of("on", "off");
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("rewind")
+                && args[1].equalsIgnoreCase("angle")) {
+            opts = List.of("5", "10", "90");
         } else {
             return Collections.emptyList();
         }
