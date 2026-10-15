@@ -36,7 +36,8 @@ import java.util.UUID;
  *
  * A wind charge is additionally spawned where the player was a few ticks
  * earlier (/ptc rewind), with the current aim - always, or only while gliding
- * on elytra (/ptc rewind elytraonly).
+ * on elytra (/ptc rewind elytraonly) - and only when aimed within a few
+ * degrees of straight up (/ptc rewind angle, default 5).
  *
  * Crossbows are different: vanilla fires them WITHOUT any shooter inertia, at
  * the aim rotated about the player's up axis (multishot spreads the side
@@ -122,7 +123,8 @@ public final class ProjectileLaunchListener implements Listener {
 
         int rewound = 0;
         if (projectile instanceof WindCharge
-                && (!Settings.rewindElytraOnly() || player.isGliding())) {
+                && (!Settings.rewindElytraOnly() || player.isGliding())
+                && 90.0 + eye.getPitch() <= Settings.rewindAngle()) {
             rewound = rewindSpawn(player, projectile);
         }
 
