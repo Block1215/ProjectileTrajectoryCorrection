@@ -13,6 +13,7 @@ public final class ProjectileTrajectoryCorrectionPlugin extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(
             new ProjectileLaunchListener(this, tracker), this);
+        getServer().getPluginManager().registerEvents(new PearlHitListener(), this);
         WindChargePearlCollisionTask.start(this);
 
         PtcDebug.startApproachTracker(this);

@@ -28,12 +28,26 @@ import java.util.UUID;
  * at high relative velocity — their swept paths cross but neither ray lands
  * inside the other's bounding box, so the charge tunnels straight through.
  *
- * Each tick we redo vanilla's ray-vs-box test in the pearl's frame of reference,
- * so the pearl's motion during the tick is accounted for. The hit box is the
- * same size vanilla would use, so this only fixes missed hits - it never makes
- * the pair collide from further away than normal.
+ * Each tick, once every entity has moved, the path the charge just travelled is
+ * tested against the pearl in the pearl's frame of reference (so the pearl's own
+ * motion is accounted for) - the same order vanilla evaluates projectile hits in
+ * when the pearl ticks first. Doing it at a fixed point of the tick makes the
+ * result independent of which of the two happens to tick first. This is the
+ * ONLY pearl/charge hit: vanilla's own pearl-hits-charge test is switched off in
+ * {@link PearlHitListener}.
+ *
+ * The hit volume is a cube centred on the pearl that starts at the pearl's own
+ * size and grows at vanilla's projectile hit-margin rate (nothing for 2 ticks,
+ * then +0.1 across per tick of pearl flight) up to the /ptc hitbox size.
+ * A pearl and charge thrown back to back (instant pearl catch) leave the hand
+ * overlapping; the small early volume lets them separate and meet up in the air
+ * instead of at the hand. The charge is removed without exploding, so the burst
+ * never knocks the teleported player around.
  */
 public final class WindChargePearlCollisionTask extends BukkitRunnable {
+
+    /** Server started with -Dptc.testlog=true: log every catch to the console. */
+    private static final boolean TEST_LOG = Boolean.getBoolean("ptc.testlog");
 
     private final Plugin plugin;
     private final Set<UUID> consumed = new HashSet<>();
@@ -58,28 +72,34 @@ public final class WindChargePearlCollisionTask extends BukkitRunnable {
             for (WindCharge wc : windCharges) {
                 if (consumed.contains(wc.getUniqueId())) continue;
                 if (!wc.isValid() || wc.isDead()) continue;
+                // Not moved yet (thrown since the last tick): nothing to test.
+                if (wc.getTicksLived() < 1) continue;
                 Vector wcVel = wc.getVelocity();
                 if (wcVel.lengthSquared() < 1e-6) continue;
 
-                Vector wcPos = wc.getLocation().toVector();
-                Vector wcNext = wcPos.clone().add(wcVel);
-
-                // Fixed size: unlike vanilla it never grows with the charge's
-                // age. Set in game with /ptc hitbox.
-                double margin = Settings.margin();
+                // The path the charge travelled during the last tick (a wind
+                // charge moves by exactly its velocity: no drag, no gravity).
+                Vector wcNow = wc.getLocation().toVector();
+                Vector wcPos = wcNow.clone().subtract(wcVel);
+                Vector wcNext = wcNow;
 
                 for (EnderPearl ep : pearls) {
                     if (!ep.isValid() || ep.isDead()) continue;
+                    if (ep.getTicksLived() < 1) continue;
 
                     Vector epPos = ep.getLocation().toVector();
                     Vector epVel = ep.getVelocity();
                     Vector epNext = epPos.clone().add(epVel);
 
+                    // Hit cube centred on the pearl, growing with its flight time.
+                    double half = Settings.hitSize(ep.getTicksLived()) / 2.0;
+                    Vector centre = ep.getBoundingBox().getCenter().subtract(epPos);
+                    BoundingBox relBox = new BoundingBox(
+                        centre.getX() - half, centre.getY() - half, centre.getZ() - half,
+                        centre.getX() + half, centre.getY() + half, centre.getZ() + half);
+
                     // Cast the charge's path in the pearl's frame of reference so
                     // the pearl's own motion during the tick is accounted for.
-                    BoundingBox relBox = ep.getBoundingBox().clone()
-                        .expand(margin)
-                        .shift(epPos.clone().multiply(-1.0));
                     Vector relStart = wcPos.clone().subtract(epPos);
                     Vector relEnd = wcNext.clone().subtract(epNext);
                     Vector relPath = relEnd.clone().subtract(relStart);
@@ -101,10 +121,14 @@ public final class WindChargePearlCollisionTask extends BukkitRunnable {
                     Location hitLoc = new Location(world,
                         epAt.getX(), epAt.getY(), epAt.getZ());
 
+                    String report = "charge caught pearl: pearl age " + ep.getTicksLived()
+                        + "t, charge age " + wc.getTicksLived() + "t, hit size "
+                        + PtcDebug.f(half * 2.0) + String.format(java.util.Locale.ROOT,
+                            ", at (%.2f, %.2f, %.2f)", epAt.getX(), epAt.getY(), epAt.getZ());
                     if (PtcDebug.on(ep.getShooter())) {
-                        PtcDebug.send((Player) ep.getShooter(), "HIT: charge caught pearl (charge age "
-                            + wc.getTicksLived() + "t)");
+                        PtcDebug.send((Player) ep.getShooter(), "HIT: " + report);
                     }
+                    if (TEST_LOG) plugin.getLogger().info("[test] " + report);
                     teleportOwner(ep, hitLoc);
                     playEffects(hitLoc);
                     ep.remove();
