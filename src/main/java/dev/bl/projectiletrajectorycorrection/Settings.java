@@ -28,8 +28,8 @@ import java.util.Locale;
  */
 final class Settings implements TabExecutor {
 
-    /** Half of the pearl's own 0.25-block box: the hit margin is added outside it. */
-    private static final double PEARL_HALF = 0.125;
+    /** The pearl's own (vanilla) box size: the hit volume starts out this big. */
+    static final double PEARL_SIZE = 0.25;
 
     static final double HITBOX_MIN = 0.25;
     static final double HITBOX_MAX = 10.0;
@@ -50,8 +50,17 @@ final class Settings implements TabExecutor {
         this.plugin = plugin;
     }
 
-    static double margin() {
-        return Math.max(0.0, hitDiameter / 2.0 - PEARL_HALF);
+    /**
+     * Size of the pearl/charge hit cube for a pearl of this age. Grows exactly
+     * like vanilla's projectile hit margin (ProjectileUtil.computeMargin: 0 for
+     * the first 2 ticks, then +0.05 per side = +0.1 across per tick), starting
+     * from the pearl's own box, but keeps growing up to the /ptc hitbox size
+     * instead of stopping at vanilla's 0.3 per side.
+     */
+    static double hitSize(int pearlAge) {
+        double full = Math.max(PEARL_SIZE, hitDiameter);
+        double margin = Math.max(0, pearlAge - 2) / 20.0;
+        return Math.min(full, PEARL_SIZE + margin * 2.0);
     }
 
     static double reach() {
@@ -188,7 +197,7 @@ final class Settings implements TabExecutor {
             case "hitbox" -> {
                 if (val == null) {
                     msg(sender, "pearl/charge hit size: " + fmt(hitDiameter) + " blocks across (reach "
-                        + fmt(reach()) + " from the pearl's centre)");
+                        + fmt(reach()) + " from the pearl's centre), " + growText());
                     msg(sender, "usage: /ptc hitbox <" + fmt(HITBOX_MIN) + "-" + fmt(HITBOX_MAX) + ">");
                     return true;
                 }
@@ -217,6 +226,16 @@ final class Settings implements TabExecutor {
         return true;
     }
 
+    /** Ticks of pearl flight until the hit cube reaches full size (vanilla growth rate). */
+    static int fullSizeTicks() {
+        return 2 + (int) Math.ceil((Math.max(PEARL_SIZE, hitDiameter) - PEARL_SIZE) / 0.1 - 1e-9);
+    }
+
+    private static String growText() {
+        return "grows at vanilla's rate from the pearl's own size (" + fmt(PEARL_SIZE)
+            + "), full size after " + fullSizeTicks() + " ticks of pearl flight";
+    }
+
     private void status(CommandSender s) {
         msg(s, "horizontal inertia removal: " + onOff(removeHorizontal) + "   /ptc horizontal on|off");
         msg(s, "vertical inertia removal: " + onOff(removeVertical) + "   /ptc vertical on|off");
@@ -224,7 +243,8 @@ final class Settings implements TabExecutor {
             + " ticks, " + (rewindElytraOnly ? "elytra only" : "always")
             + ", within " + fmt(rewindAngle) + " deg of straight up"
             + "   /ptc rewind on|off|<ticks>|elytraonly on|off|angle <deg>");
-        msg(s, "pearl/charge hit size: " + fmt(hitDiameter) + " blocks   /ptc hitbox <blocks>");
+        msg(s, "pearl/charge hit size: " + fmt(hitDiameter) + " blocks (full after " + fullSizeTicks()
+            + " ticks, vanilla growth rate)   /ptc hitbox <blocks>");
     }
 
     @Override

@@ -20,6 +20,13 @@ elytra-wind-charge-rewind:
 
 # Size of the hit volume used when a wind charge meets an ender pearl.
 # A cube of this many blocks across, centred on the pearl (2 = hits from
-# 1 block away). Vanilla is about 0.85 across at most. Only pearl/charge
-# hits use this; every other collision is untouched.   /ptc hitbox <0.25-10>
+# 1 block away). Only pearl/charge hits use this; every other collision
+# (blocks, players, mobs) is untouched.                 /ptc hitbox <0.25-10>
 hit-diameter: 2.0
+
+#
+# The volume starts at the pearl's own size (0.25) when thrown and grows at
+# vanilla's projectile hit-margin rate (nothing for 2 ticks, then +0.1 across
+# per tick of pearl flight) until it reaches hit-diameter (2.0 -> 20 ticks).
+# This is what lets a pearl and charge thrown back to back (instant pearl
+# catch) meet in the air instead of right in your hand.
