@@ -3,6 +3,7 @@ package dev.bl.projectiletrajectorycorrection;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.entity.Firework;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.ThrownExpBottle;
@@ -32,7 +33,9 @@ import java.util.UUID;
  * shot along the aim, removing the scatter on every axis. The horizontal and
  * vertical inertia are then left out or put back per /ptc horizontal and
  * /ptc vertical (default: horizontal removed, vertical kept as vanilla), the
- * same rule in every state (walking, jumping, falling, gliding).
+ * same rule in every state (walking, jumping, falling, gliding) - but only
+ * when aimed within a few degrees of straight up (/ptc inertia angle,
+ * default 5). Any other throw keeps vanilla's inertia on both axes.
  *
  * A wind charge is additionally spawned where the player was a few ticks
  * earlier (/ptc rewind), with the current aim - always, or only while gliding
@@ -43,6 +46,8 @@ import java.util.UUID;
  * the aim rotated about the player's up axis (multishot spreads the side
  * arrows). Subtracting inertia there would drag the arrow backwards while
  * flying, so crossbow shots only get their scatter removed.
+ *
+ * Firework rockets used by hand are left untouched.
  */
 public final class ProjectileLaunchListener implements Listener {
 
@@ -89,6 +94,11 @@ public final class ProjectileLaunchListener implements Listener {
             return;
         }
 
+        // A rocket used by hand (set off from the ground, or an elytra boost) is
+        // not thrown along the aim: vanilla launches it straight up, and a rocket
+        // grows any sideways speed by 15% every tick. Leave it exactly as vanilla.
+        if (projectile instanceof Firework) return;
+
         // The direction vanilla actually throws in.
         Vector aim = look;
         if (projectile instanceof ThrownPotion || projectile instanceof ThrownExpBottle) {
@@ -110,13 +120,15 @@ public final class ProjectileLaunchListener implements Listener {
         if (power <= 0.0) power = shot.length();
 
         // Scatter is always gone. Each inertia axis is removed only if enabled
-        // (/ptc horizontal, /ptc vertical); otherwise vanilla's value goes back in.
+        // (/ptc horizontal, /ptc vertical) and the player is looking within
+        // /ptc inertia angle of straight up; otherwise vanilla's value goes back in.
+        boolean nearUp = 90.0 + eye.getPitch() <= Settings.inertiaAngle();
         Vector newVel = aim.clone().multiply(power);
-        if (!Settings.removeHorizontal()) {
+        if (!nearUp || !Settings.removeHorizontal()) {
             newVel.setX(newVel.getX() + applied.getX());
             newVel.setZ(newVel.getZ() + applied.getZ());
         }
-        if (!Settings.removeVertical()) {
+        if (!nearUp || !Settings.removeVertical()) {
             newVel.setY(newVel.getY() + applied.getY());
         }
         projectile.setVelocity(newVel);

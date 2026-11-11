@@ -16,6 +16,7 @@ import java.util.Locale;
  *   /ptc                         show every setting
  *   /ptc horizontal on|off       remove the shooter's horizontal inertia
  *   /ptc vertical on|off         remove the shooter's vertical inertia
+ *   /ptc inertia angle <degrees> ...only when aimed within this many degrees of straight up
  *   /ptc rewind on|off           wind charge: throw from an earlier position
  *   /ptc rewind elytraonly on|off   ...only while gliding on elytra
  *   /ptc rewind <ticks>          ...how many ticks back
@@ -39,6 +40,7 @@ final class Settings implements TabExecutor {
     private static volatile double hitDiameter = 2.0;
     private static volatile boolean removeHorizontal = true;
     private static volatile boolean removeVertical = false;
+    private static volatile double inertiaAngle = 5.0;
     private static volatile boolean rewindEnabled = true;
     private static volatile int rewindTicks = 3;
     private static volatile boolean rewindElytraOnly = false;
@@ -75,6 +77,11 @@ final class Settings implements TabExecutor {
         return removeVertical;
     }
 
+    /** Inertia removal only applies when the aim is within this many degrees of straight up. */
+    static double inertiaAngle() {
+        return inertiaAngle;
+    }
+
     static boolean rewindElytraOnly() {
         return rewindElytraOnly;
     }
@@ -96,6 +103,7 @@ final class Settings implements TabExecutor {
         hitDiameter = clamp(c.getDouble("hit-diameter", 2.0), HITBOX_MIN, HITBOX_MAX);
         removeHorizontal = c.getBoolean("remove-horizontal-inertia", true);
         removeVertical = c.getBoolean("remove-vertical-inertia", false);
+        inertiaAngle = clamp(c.getDouble("inertia-removal-max-angle-from-up", 5.0), 0.0, ANGLE_MAX);
         rewindEnabled = c.getBoolean("elytra-wind-charge-rewind.enabled", true);
         rewindTicks = (int) clamp(c.getInt("elytra-wind-charge-rewind.ticks", 3), 0, REWIND_MAX);
         rewindElytraOnly = c.getBoolean("elytra-wind-charge-rewind.elytra-only", false);
@@ -133,6 +141,28 @@ final class Settings implements TabExecutor {
                 save("remove-vertical-inertia", b);
                 msg(sender, "vertical inertia removal: " + onOff(b)
                     + (b ? " (throws ignore your vertical movement)" : " (vanilla vertical inertia)"));
+            }
+            case "inertia" -> {
+                if (!"angle".equals(val) || args.length < 3) {
+                    msg(sender, "inertia removal: only within " + fmt(inertiaAngle)
+                        + " degrees of straight up   /ptc inertia angle <0-" + fmt(ANGLE_MAX) + ">");
+                    return true;
+                }
+                double a;
+                try {
+                    a = Double.parseDouble(args[2]);
+                } catch (NumberFormatException e) {
+                    msg(sender, "not a number: " + args[2]);
+                    return true;
+                }
+                if (!(a >= 0.0) || a > ANGLE_MAX) {
+                    msg(sender, "angle must be between 0 and " + fmt(ANGLE_MAX));
+                    return true;
+                }
+                inertiaAngle = a;
+                save("inertia-removal-max-angle-from-up", a);
+                msg(sender, "inertia removal: only within " + fmt(a) + " degrees of straight up"
+                    + (a >= ANGLE_MAX ? " (= every angle)" : ""));
             }
             case "rewind" -> {
                 if (val == null) {
@@ -221,7 +251,7 @@ final class Settings implements TabExecutor {
                 msg(sender, "config reloaded.");
                 status(sender);
             }
-            default -> msg(sender, "unknown option. /ptc [horizontal|vertical|rewind|hitbox|reload]");
+            default -> msg(sender, "unknown option. /ptc [horizontal|vertical|inertia|rewind|hitbox|reload]");
         }
         return true;
     }
@@ -239,6 +269,8 @@ final class Settings implements TabExecutor {
     private void status(CommandSender s) {
         msg(s, "horizontal inertia removal: " + onOff(removeHorizontal) + "   /ptc horizontal on|off");
         msg(s, "vertical inertia removal: " + onOff(removeVertical) + "   /ptc vertical on|off");
+        msg(s, "inertia removal applies within " + fmt(inertiaAngle)
+            + " deg of straight up   /ptc inertia angle <deg>");
         msg(s, "elytra wind charge rewind: " + onOff(rewindEnabled) + ", " + rewindTicks
             + " ticks, " + (rewindElytraOnly ? "elytra only" : "always")
             + ", within " + fmt(rewindAngle) + " deg of straight up"
@@ -251,10 +283,11 @@ final class Settings implements TabExecutor {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> opts;
         if (args.length == 1) {
-            opts = List.of("horizontal", "vertical", "rewind", "hitbox", "reload");
+            opts = List.of("horizontal", "vertical", "inertia", "rewind", "hitbox", "reload");
         } else if (args.length == 2) {
             opts = switch (args[0].toLowerCase(Locale.ROOT)) {
                 case "horizontal", "vertical" -> List.of("on", "off");
+                case "inertia" -> List.of("angle");
                 case "rewind" -> List.of("on", "off", "elytraonly", "angle", "1", "2", "3", "4", "5");
                 case "hitbox" -> List.of("1", "1.5", "2");
                 default -> List.of();
@@ -262,8 +295,8 @@ final class Settings implements TabExecutor {
         } else if (args.length == 3 && args[0].equalsIgnoreCase("rewind")
                 && args[1].equalsIgnoreCase("elytraonly")) {
             opts = List.of("on", "off");
-        } else if (args.length == 3 && args[0].equalsIgnoreCase("rewind")
-                && args[1].equalsIgnoreCase("angle")) {
+        } else if (args.length == 3 && (args[0].equalsIgnoreCase("rewind")
+                || args[0].equalsIgnoreCase("inertia")) && args[1].equalsIgnoreCase("angle")) {
             opts = List.of("5", "10", "90");
         } else {
             return Collections.emptyList();
