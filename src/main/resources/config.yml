@@ -7,6 +7,11 @@ remove-horizontal-inertia: true
 # off = vertical inertia exactly as vanilla.
 remove-vertical-inertia: false
 
+# Both removals above only apply when aimed within this many degrees of
+# straight up (90 = every angle). Other throws keep vanilla inertia.
+#                                                                /ptc inertia angle <0-90>
+inertia-removal-max-angle-from-up: 5.0
+
 # Wind charges are spawned where the player was this many ticks earlier
 # (the aim is the current one).                                  /ptc rewind on|off|<ticks>
 # elytra-only: true = only while gliding on elytra.              /ptc rewind elytraonly on|off
