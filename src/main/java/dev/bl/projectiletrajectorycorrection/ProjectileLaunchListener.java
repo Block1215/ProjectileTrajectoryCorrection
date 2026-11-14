@@ -102,8 +102,14 @@ public final class ProjectileLaunchListener implements Listener {
         // The direction vanilla actually throws in.
         Vector aim = look;
         if (projectile instanceof ThrownPotion || projectile instanceof ThrownExpBottle) {
-            aim = new Location(null, 0, 0, 0, eye.getYaw(),
-                eye.getPitch() + LOBBED_PITCH_OFFSET).getDirection();
+            // Vanilla (shootFromRotation with zRot -20) only lifts the vertical
+            // part: horizontal stays cos(pitch), so looking straight up or down
+            // still throws straight up or down.
+            double yaw = Math.toRadians(eye.getYaw());
+            double pitch = Math.toRadians(eye.getPitch());
+            double lifted = Math.toRadians(eye.getPitch() + LOBBED_PITCH_OFFSET);
+            aim = new Vector(-Math.sin(yaw) * Math.cos(pitch), -Math.sin(lifted),
+                Math.cos(yaw) * Math.cos(pitch)).normalize();
         }
 
         // Exactly what vanilla added; estimate only if the server can't tell us.
